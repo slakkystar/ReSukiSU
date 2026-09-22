@@ -41,6 +41,7 @@ static apk_sign_key_t apk_sign_keys[] = {
     { EXPECTED_SIZE_KOWX712, EXPECTED_HASH_KOWX712 }, // KOWX712/KernelSU
     { EXPECTED_SIZE_KSUNEXT, EXPECTED_HASH_KSUNEXT }, // KernelSU-Next/KernelSU-Next
     { EXPECTED_SIZE_KERNELSU, EXPECTED_HASH_KERNELSU }, // backslashxx/KernelSU
+    { EXPECTED_SIZE_MAMBOSU, EXPECTED_HASH_MAMBOSU }, // RapliVx/KernelSU
 #ifdef EXPECTED_SIZE
     { EXPECTED_SIZE, EXPECTED_HASH }, // Custom
 #endif
