@@ -5,6 +5,7 @@ import com.resukisu.resukisu.BuildConfig
 import com.resukisu.resukisu.data.AppSettingsRepository
 import com.resukisu.resukisu.data.application.ApplicationControlRepository
 import com.resukisu.resukisu.data.application.DynamicManagerRepository
+import com.resukisu.resukisu.data.count.CountRepository
 import com.resukisu.resukisu.data.download.DownloadRepository
 import com.resukisu.resukisu.data.file.ModuleFileRepository
 import com.resukisu.resukisu.data.flash.FlashRepository
@@ -71,8 +72,6 @@ import com.resukisu.resukisu.domain.usecase.GetBooleanPreferenceUseCase
 import com.resukisu.resukisu.domain.usecase.GetCatalogModuleUseCase
 import com.resukisu.resukisu.domain.usecase.GetDefaultUmountModulesUseCase
 import com.resukisu.resukisu.domain.usecase.GetHomeBasicInfoUseCase
-import com.resukisu.resukisu.domain.usecase.GetHomeModuleOverviewUseCase
-import com.resukisu.resukisu.domain.usecase.GetHomeSuperuserCountUseCase
 import com.resukisu.resukisu.domain.usecase.GetInstallEnvironmentUseCase
 import com.resukisu.resukisu.domain.usecase.GetKernelFeatureSettingsUseCase
 import com.resukisu.resukisu.domain.usecase.GetKernelStatusUseCase
@@ -89,6 +88,7 @@ import com.resukisu.resukisu.domain.usecase.InitializeApplicationUseCase
 import com.resukisu.resukisu.domain.usecase.IsLateLoadModeUseCase
 import com.resukisu.resukisu.domain.usecase.IsModuleUriAccessibleUseCase
 import com.resukisu.resukisu.domain.usecase.IsNetworkAvailableUseCase
+import com.resukisu.resukisu.domain.usecase.IsSoftRebootPreferredUseCase
 import com.resukisu.resukisu.domain.usecase.IsSystemLanguageSettingsUseCase
 import com.resukisu.resukisu.domain.usecase.LaunchSystemLanguageSettingsUseCase
 import com.resukisu.resukisu.domain.usecase.LoadSettingsPlatformUseCase
@@ -219,6 +219,7 @@ val coreModule = module {
 
 val repositoryModule = module {
     single { KsuCliRepository(androidApplication()) }
+    singleOf(::CountRepository)
     singleOf(::InstalledPackageCache)
     singleOf(::AppIconDataSource)
     singleOf(::RootServiceRepository)
@@ -295,13 +296,12 @@ val repositoryModule = module {
 val useCaseModule = module {
     factoryOf(::InitializeApplicationUseCase)
     factoryOf(::GetHomeBasicInfoUseCase)
-    factoryOf(::GetHomeModuleOverviewUseCase)
-    factoryOf(::GetHomeSuperuserCountUseCase)
     factoryOf(::IsNetworkAvailableUseCase)
     factoryOf(::LoadSettingsPlatformUseCase)
     factoryOf(::UpdateAppearanceUseCase)
     factoryOf(::UpdatePlatformSettingUseCase)
     factoryOf(::GetPlatformFeatureStatusUseCase)
+    factoryOf(::IsSoftRebootPreferredUseCase)
     factoryOf(::CheckManagerUpdateUseCase)
     factoryOf(::EnsureManagerInstalledUseCase)
     factoryOf(::RebootUseCase)

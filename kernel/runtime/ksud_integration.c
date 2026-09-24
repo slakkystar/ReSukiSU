@@ -95,7 +95,7 @@ static void stop_execve_hook(void);
         bool ret = schedule_work(&stop_input_hook_work);
         pr_info("unregister input kprobe: %d!\n", ret);
     }
-#elif defined(CONFIG_KSU_INLINE_HOOK)
+#elif defined(CONFIG_KSU_SUSFS)
     DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);
     DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);
 
@@ -394,7 +394,7 @@ static void load_module_rc_once(void)
         return;
     }
 
-    old_cred = ksu_cred ? override_creds(ksu_cred) : NULL;
+    old_cred = override_creds(ksu_cred);
 
     f = open_module_rc(&path);
     if (IS_ERR(f)) {
@@ -435,8 +435,7 @@ out_close_file:
     filp_close(f, NULL);
 
 out_revert_creds:
-    if (old_cred)
-        revert_creds(old_cred);
+    revert_creds(old_cred);
 }
 
 static void free_module_rc(void)
@@ -680,7 +679,7 @@ void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_pt
 
 #endif
 
-#ifdef CONFIG_KSU_INLINE_HOOK
+#ifdef CONFIG_KSU_SUSFS
 void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr)
 {
     struct file *file = fget(fd);
@@ -702,7 +701,7 @@ void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr)
     }
     fput(file);
 }
-#endif // #ifdef CONFIG_KSU_INLINE_HOOK
+#endif // #ifdef CONFIG_KSU_SUSFS
 
 void ksu_handle_initrc(struct file *file)
 {
@@ -801,9 +800,12 @@ int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *v
         if (val) {
             // key pressed, count it
             volumedown_pressed_count += 1;
-            if (is_volumedown_enough(volumedown_pressed_count)) {
-                ksu_stop_input_hook_runtime();
-            }
+            // don't stop hook, or sleep in atomic context
+            // keep for on_post_fs_data do that
+            // check https://github.com/ReSukiSU/ReSukiSU/issues/363
+            // if (is_volumedown_enough(volumedown_pressed_count)) {
+            //     ksu_stop_input_hook_runtime();
+            // }
         }
     }
 
@@ -949,11 +951,9 @@ bool ksu_is_safe_mode()
 }
 
 #ifdef CONFIG_KSU_TRACEPOINT_HOOK
-void ksu_execve_hook_ksud(const struct pt_regs *regs)
+static void ksu_execve_hook_ksud_common(const char __user *filename_user, const char __user *const __user *argv_user)
 {
-    const char __user **filename_user = (const char **)&PT_REGS_PARM1(regs);
-    const char __user *const __user *__argv = (const char __user *const __user *)PT_REGS_PARM2(regs);
-    struct user_arg_ptr argv = { .ptr.native = __argv };
+    struct user_arg_ptr argv = { .ptr.native = argv_user };
     char path[32];
     long ret;
     unsigned long addr;
@@ -962,7 +962,7 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
     if (!filename_user)
         return;
 
-    addr = untagged_addr((unsigned long)*filename_user);
+    addr = untagged_addr((unsigned long)filename_user);
     fn = (const char __user *)addr;
 
     memset(path, 0, sizeof(path));
@@ -973,6 +973,22 @@ void ksu_execve_hook_ksud(const struct pt_regs *regs)
     }
 
     ksu_handle_execveat_ksud(path, &argv, NULL, NULL);
+}
+
+void ksu_execve_hook_ksud(const struct pt_regs *regs)
+{
+    const char __user *filename_user = (const char __user *)PT_REGS_PARM1(regs);
+    const char __user *const __user *argv_user = (const char __user *const __user *)PT_REGS_PARM2(regs);
+
+    ksu_execve_hook_ksud_common(filename_user, argv_user);
+}
+
+void ksu_execveat_hook_ksud(const struct pt_regs *regs)
+{
+    const char __user *filename_user = (const char __user *)PT_REGS_PARM2(regs);
+    const char __user *const __user *argv_user = (const char __user *const __user *)PT_REGS_PARM3(regs);
+
+    ksu_execve_hook_ksud_common(filename_user, argv_user);
 }
 
 static long (*orig_sys_read)(const struct pt_regs *regs);

@@ -77,44 +77,40 @@ config KSU_MULTI_MANAGER_SUPPORT
 	help
 		Enable multi KernelSU manager support
 
-menu "KernelSU Hooking Method"
+choice
+	prompt "KernelSU Hooking Method"
 	depends on KSU
+	default KSU_TRACEPOINT_HOOK
+	help
+	  Select the hooking method for KernelSU.
+	  Note: Tracepoint Syscall Redirect hook is only supported for GKI2(5.10+)
 
-comment "Select the hooking method for KernelSU."
-comment "Manual hook takes precedence over inline hook, inline over tracepoint."
+config KSU_TRACEPOINT_HOOK
+	bool "Tracepoint Syscall Redirect"
+	help
+	  The standard, upstream method for modern kernels. 
+	  Utilizes GKI tracepoints for syscall redirection. 
+	  The implementation is only for devices with GKI2 support.
+	  Support for kernel 5.10+
 
 config KSU_MANUAL_HOOK
 	bool "Manually hook KernelSU"
 	depends on KSU != m
 	help
-	  If enabled, it hooks the required KernelSU syscalls
+	  If enabled, it hooks the required KernelSU syscalls 
 	  with a manually-patched function.
 	  Support for kernel 3.4+
 
-config KSU_INLINE_HOOK
+config KSU_SUSFS
 	bool "SUSFS Inline Hook"
-	depends on KSU != m && KSU_SUSFS
-	depends on !KSU_MANUAL_HOOK
+	depends on THREAD_INFO_IN_TASK && 64BIT
 	help
-	  If enabled, it relies on the syscall hooks that simonpunk's SUSFS
-	  patch already inlines into the kernel, instead of hooking them
-	  itself. Requires KSU_SUSFS, and the kernel tree must carry the
-	  SUSFS hooks exactly as the upstream patch places them.
-	  Support for kernel 3.4+
+	  Patch and Enable SUSFS to kernel with KernelSU.
+	  SuSFS Officially support kernel 5.10+
+	  This KSU driver support it for 4.3+ in KSU side, 
+	  But the kernel side susfs compatibility MUST completed by yourself.
 
-config KSU_TRACEPOINT_HOOK
-	bool "Tracepoint Syscall Redirect"
-	depends on !KSU_MANUAL_HOOK && !KSU_INLINE_HOOK
-	default y
-	help
-	  The standard, upstream method for modern kernels.
-	  Utilizes GKI tracepoints for syscall redirection.
-	  The implementation is only for devices with GKI2 support.
-	  Support for kernel 5.10+
-	  This is the default when neither the manual nor the SUSFS inline
-	  hook is enabled.
-
-endmenu
+endchoice
 
 menu "KernelSU - Manual Hook Auto hook"
     depends on KSU_MANUAL_HOOK
@@ -123,7 +119,7 @@ comment "------------------------WARNING-------------------------------"
 comment "ReSukiSU will check EVERY hooks in kernel compile process"
 comment "If anything mismatch with document, Kernel compile maybe FAILED!"
 comment "See document if you face any compile failed due to hook check"
-comment "Document: https://resukisu.github.io/guide/manual-integrate.html"
+comment "Document: https://resukisu.org/guide/manual-integrate.html"
 comment "--------------------------------------------------------------"
 
 config KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -161,13 +157,6 @@ config KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
 
 endmenu
 
-config KSU_SUSFS
-	bool "SUSFS support"
-	depends on KSU && KSU != m
-	depends on THREAD_INFO_IN_TASK && 64BIT
-	help
-	  Patch and Enable SUSFS to kernel with KernelSU.
-
 menu "KernelSU - SUSFS"
     depends on KSU_SUSFS
 
@@ -180,7 +169,7 @@ comment "--------------------------------------------------------------"
 config KSU_SUSFS_SUS_PATH
     bool "Enable to hide suspicious path"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Allow hiding the user-defined path and all its sub-paths from various system calls.
         - Use "add_sus_path_loop" instead of "add_sus_path" if the user-defined path is frequently modified.
@@ -191,7 +180,7 @@ config KSU_SUSFS_SUS_PATH
 config KSU_SUSFS_SUS_MOUNT
     bool "Enable to hide suspicious mounts"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Automatically assign fake mnt_id and fake mnt_group_id for mounts mounted by ksu process until /sdcard is decrypted, this is to evade from mnt_id/mnt_group_id gap detections.
         - Allow hiding all sus mounts from /proc/self/[mounts|mountinfo|mountstat] for non-su processes.
@@ -199,23 +188,15 @@ config KSU_SUSFS_SUS_MOUNT
 config KSU_SUSFS_SUS_KSTAT
     bool "Enable to spoof suspicious kstat"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Allow spoofing the kstat of user-defined file/directory.
-        - Effective only on zygote spawned user app process.
-
-config KSU_SUSFS_TRY_UMOUNT
-	bool "Enable to use ksu's try_umount"
-	depends on KSU_SUSFS
-	default n
-	help
-		- Allow using try_umount to umount other user-defined mount paths prior to ksu's default umount paths.
-		- Effective only on zygote spawned umounted user app process.
+        - Effective only on zygote spawned user app process with uid >= 10000.
 
 config KSU_SUSFS_SPOOF_UNAME
     bool "Enable to spoof uname"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Allow spoofing the string returned by uname syscall to user-defined string.
         - Effective on all processes.
@@ -223,14 +204,14 @@ config KSU_SUSFS_SPOOF_UNAME
 config KSU_SUSFS_ENABLE_LOG
     bool "Enable logging susfs log to kernel"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Allow logging susfs log to kernel, uncheck it to completely disable all susfs log.
 
 config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
     bool "Enable to automatically hide ksu and susfs symbols from /proc/kallsyms"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Automatically hide ksu and susfs symbols from '/proc/kallsyms'.
         - Effective on all processes.
@@ -238,7 +219,7 @@ config KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
 config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
     bool "Enable to spoof /proc/bootconfig (gki) or /proc/cmdline (non-gki)"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Spoof the output of /proc/bootconfig (gki) or /proc/cmdline (non-gki) with a user-defined file.
         - Effective on all processes.
@@ -246,7 +227,7 @@ config KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
 config KSU_SUSFS_OPEN_REDIRECT
     bool "Enable to redirect a path to be opened with another path (experimental)"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Allow redirecting a target path to be opened with another user-defined path.
         - Please be reminded that process with open access to the target and redirected path can be detected.
@@ -255,7 +236,7 @@ config KSU_SUSFS_OPEN_REDIRECT
 config KSU_SUSFS_SUS_MAP
     bool "Enable hiding some mmapped real files from different proc maps interfaces"
     depends on KSU_SUSFS
-    default n
+    default y
     help
         - Allow hiding mmapped real files from /proc/<pid>/[maps|smaps|smaps_rollup|map_files|mem|pagemap]
         - It does NOT support hiding anon memory.

@@ -7,6 +7,7 @@ kernelsu-objs += feature/kernel_umount.o
 kernelsu-objs += feature/sulog.o
 kernelsu-objs += feature/adb_root.o
 kernelsu-objs += feature/selinux_hide.o
+kernelsu-objs += feature/module_load_filter.o
 kernelsu-objs += hook/setuid_hook.o
 
 ifndef CONFIG_KSU_DISABLE_MANAGER
@@ -39,7 +40,7 @@ ifdef CONFIG_ARM64
 kernelsu-objs += compat/apatch_conflict.o
 endif
 
-ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes 
+ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-missing-prototypes
 ccflags-y += $(call cc-disable-warning, int-conversion)
 ccflags-y += -Wno-declaration-after-statement -Wno-unused-function -Wno-unused-variable -Wno-missing-braces
 ccflags-y += -Wno-int-to-pointer-cast -Wno-declaration-after-statement
@@ -111,6 +112,10 @@ endif
 else
 KERNEL_TYPE := GKI 2.0
 endif
+
+ifneq ($(shell test $(VERSION) -ge 4; echo $$?),0)
+KERNEL_TYPE := Non-GKI (Legacy)
+endif
 $(info -- KERNEL_VERSION: $(KERNEL_VERSION))
 $(info -- KERNEL_TYPE: $(KERNEL_TYPE))
 
@@ -166,7 +171,7 @@ ifdef CONFIG_KSU_TRACEPOINT_HOOK
       $(info -- Current Kernel Type: $(KERNEL_TYPE))
       $(info -- If you really want to continue, go to Kbuild and comment out this warning.)
       $(info -- Usually, this error occurs because you forgot to enable some kernel configurations.)
-      $(info -- Read: https://resukisu.github.io/guide/manual-integrate.html)
+      $(info -- Read: https://resukisu.org/guide/manual-integrate.html)
       $(error TP hooks are incompatible with Non-GKI/GKI 1.0 kernels.)
     endif
   endif
@@ -174,16 +179,9 @@ ifdef CONFIG_KSU_TRACEPOINT_HOOK
 else ifdef CONFIG_KSU_MANUAL_HOOK
   $(info -- $(REPO_NAME): using Manual Hook)
   include $(KSU_SRC)/tools/manual_hook_check.mk
-else ifdef CONFIG_KSU_INLINE_HOOK
+else ifdef CONFIG_KSU_SUSFS
   $(info -- $(REPO_NAME): using SuSFS Inline hook)
   include $(KSU_SRC)/tools/inline_hook_check.mk
-else
-  ifeq ($(CONFIG_KSU),y)
-    $(error Unsupported hook method)
-  endif
-endif
-
-ifdef CONFIG_KSU_SUSFS
   include $(KSU_SRC)/tools/susfs_compat.mk
   ifeq ($(shell test -e $(srctree)/fs/susfs.c; echo $$?),0)
     $(eval SUSFS_VERSION=$(shell cat $(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g'))
@@ -193,6 +191,10 @@ ifdef CONFIG_KSU_SUSFS
     $(info -- You have not integrated susfs in your kernel yet.)
     $(info -- Read: https://gitlab.com/simonpunk/susfs4ksu)
     $(error You should integrate susfs in your kernel.)
+  endif
+else
+  ifeq ($(CONFIG_KSU),y)
+    $(error Unsupported hook method)
   endif
 endif
 

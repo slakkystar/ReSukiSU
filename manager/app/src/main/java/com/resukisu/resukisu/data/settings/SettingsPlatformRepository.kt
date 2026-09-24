@@ -6,6 +6,9 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamiccolor.ColorSpec
+import com.resukisu.resukisu.Natives
 import com.resukisu.resukisu.data.AppSettingsRepository
 import com.resukisu.resukisu.data.shell.KsuCliRepository
 import com.resukisu.resukisu.data.theme.ThemeRepository
@@ -40,6 +43,7 @@ class SettingsPlatformRepository(
         themeConfig.dynamicPaletteStyle = themeRepository.loadDynamicPaletteStyle(
             themeConfig.dynamicColorSpec,
         )
+        themeConfig.useBuiltinMonoFont = settings.getBoolean("use_builtin_monospace_font", false)
         backgroundManager.loadCustomBackground()
         val systemDpi = application.resources.displayMetrics.densityDpi
         val currentDpi = settings.getInt("app_dpi", systemDpi)
@@ -78,6 +82,8 @@ class SettingsPlatformRepository(
             checkBetaUpdate = settings.getBoolean("check_beta_update", true),
             checkModuleUpdate = loadModuleUpdatePreference(),
             autoJailbreakEnabled = settings.getBoolean("auto_jailbreak", false),
+            useBuiltinMonoFont = themeConfig.useBuiltinMonoFont,
+            useSoftReboot = settings.getBoolean("use_soft_reboot", false),
         )
     }
 
@@ -180,6 +186,13 @@ class SettingsPlatformRepository(
             is PlatformSetting.AutoJailbreak -> setAutoJailbreak(setting.enabled)
             is PlatformSetting.AdbRoot -> setAdbRoot(setting.enabled)
             is PlatformSetting.SuCompatMode -> settings.putInt("su_compat_mode", setting.value)
+            is PlatformSetting.BuiltinMonospaceFont -> {
+                settings.putBoolean("use_builtin_monospace_font", setting.enabled)
+                themeConfig.useBuiltinMonoFont = setting.enabled
+            }
+
+            is PlatformSetting.UseSoftReboot ->
+                settings.putBoolean("use_soft_reboot", setting.enabled)
         }
         Result.success(load())
     } catch (error: CancellationException) {
@@ -187,6 +200,10 @@ class SettingsPlatformRepository(
     } catch (error: Exception) {
         Result.failure(error)
     }
+
+    fun isSoftRebootPreferred(): Boolean =
+        Natives.isFullFeatured() &&
+            (Natives.isLateLoadMode || settings.getBoolean("use_soft_reboot", false))
 
     suspend fun getFeatureStatus(): PlatformFeatureStatus = withContext(Dispatchers.IO) {
         PlatformFeatureStatus(
@@ -249,7 +266,6 @@ class SettingsPlatformRepository(
         cardConfig.save()
         themeConfig.preventBackgroundRefresh = false
         backgroundManager.saveBackgroundDim(0f)
-        backgroundManager.saveEnableBlur(false)
         backgroundManager.saveEnableBlurExp(false)
         backgroundManager.saveUseBackgroundSeedColor(false)
         backgroundManager.saveEnableHighContrastMode(false)
@@ -283,8 +299,8 @@ class SettingsPlatformRepository(
 
     private fun toggleLauncherIcon(useAlt: Boolean) {
         val packageName = application.packageName
-        val main = ComponentName(packageName, "$packageName.ui.MainActivity")
-        val alias = ComponentName(packageName, "$packageName.ui.MainActivityAlias")
+        val main = ComponentName(packageName, "com.resukisu.resukisu.ui.MainActivity")
+        val alias = ComponentName(packageName, "com.resukisu.resukisu.ui.MainActivityAlias")
         application.packageManager.setComponentEnabledSetting(
             if (useAlt) alias else main,
             PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
